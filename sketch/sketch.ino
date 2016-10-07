@@ -1,6 +1,6 @@
 #include "Timer.h"
 
-// #define DEBUG
+#define DEBUG
 
 Timer t;
 
@@ -55,8 +55,12 @@ void send_clock_synchro() {
 	toggle_send_state();
 }
 
-void setup_clock_synchro() {
+void setup_send_clock_synchro() {
 	t.every(duration, send_clock_synchro);
+}
+
+void setup_send_random_bit() {
+	t.every(duration, send_random_bit);
 }
 
 // void receive_bit() {
@@ -74,8 +78,8 @@ void setup() {
 	pinMode(pin_emitter, OUTPUT); // pseudo-laser
 	pinMode(pin_receiver, INPUT);  // pseudo-diode
 	pinMode(pin_control_led, OUTPUT); // control led
-	t.every(duration, send_random_bit);
-	t.after(duration/2, setup_clock_synchro);
+	t.after(duration/2, setup_send_clock_synchro);
+	t.after(duration, setup_send_random_bit);
 }
 
 void loop() {
