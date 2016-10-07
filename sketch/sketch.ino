@@ -1,20 +1,32 @@
 #include "Timer.h"
+#include <assert.h>
 
+// if DEBUG == 0 -> no messages
 // if DEBUG == 1 -> high level messages
 // if DEBUG == 2 -> high + low level messages
 #define DEBUG 1
 
 Timer t;
 
-int timer_receiver;
-int clock_receiver = 0;
+int bit_sent;
 int state_sent = LOW;
 int state_received;
-int duration = 1000; // ms
+int duration = 2; // ms
 
 const int pin_emitter = 7;
 const int pin_receiver = 10;
 const int pin_control_led = 13;
+
+void __assert(const char *__func, const char *__file, int __lineno, const char *__sexp) {
+    // transmit diagnostic informations through serial link. 
+    Serial.println(__func);
+    Serial.println(__file);
+    Serial.println(__lineno, DEC);
+    Serial.println(__sexp);
+    Serial.flush();
+    // abort program execution.
+    abort();
+}
 
 void send_HIGH() {
 	digitalWrite(pin_emitter, HIGH);
@@ -42,7 +54,7 @@ void toggle_send_state() {
 }
 
 void send_random_bit() {
-	int bit_sent = random(2);
+	bit_sent = random(2);
 	#if DEBUG >= 1
 		Serial.print("Sending ");
 		Serial.println(bit_sent);
@@ -94,16 +106,12 @@ void receive_clock_synchro() {
 }
 
 void receive_bit() {
-	if (receive_transition()) {
-		#if DEBUG >= 1
-			Serial.println("Received 1");
-		#endif
-	}
-	else {
-		#if DEBUG >= 1
-			Serial.println("Received 0");
-		#endif
-	}
+	int bit_received = receive_transition();
+	#if DEBUG >= 1
+		Serial.print("Received ");
+		Serial.println(bit_received);
+	#endif
+	assert(bit_received == bit_sent);
 	t.after(duration*1.05/2, receive_clock_synchro);
 }
 
