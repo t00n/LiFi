@@ -4,17 +4,20 @@
 // if DEBUG == 0 -> no messages
 // if DEBUG == 1 -> high level messages
 // if DEBUG == 2 -> high + low level messages
-#define DEBUG 1
+#define DEBUG 0
 
 Timer t;
 
+int nb_good = 0;
+int nb_total = 0;
 int bit_sent;
 int state_sent = LOW;
 int state_received;
-int duration = 2; // ms
+int duration = 40; // ms
 
+const int pin_calibration = 6;
 const int pin_emitter = 7;
-const int pin_receiver = 10;
+const int pin_receiver = A0;
 const int pin_control_led = 13;
 
 void __assert(const char *__func, const char *__file, int __lineno, const char *__sexp) {
@@ -62,6 +65,7 @@ void send_random_bit() {
 	if (bit_sent) {
 		toggle_send_state();
 	}
+	nb_total += 1;
 }
 
 void send_clock_synchro() {
@@ -80,10 +84,13 @@ void setup_send_random_bit() {
 }
 
 void receive() {
-	state_received = digitalRead(pin_receiver);
+	int read = analogRead(pin_receiver);
+	state_received = read > 60;
+	// Serial.println(read);
 	#if DEBUG >= 2
+		digitalWrite(pin_control_led, state_received ? HIGH : LOW);
 		Serial.print("Received ");
-		Serial.print(state_received);
+		Serial.println(state_received);
 	#endif
 }
 
@@ -98,10 +105,10 @@ void receive_clock_synchro() {
 		#if DEBUG >= 1
 			Serial.println("Received clock synchro");
 		#endif
-		t.after(duration*1.05/2, receive_bit);
+		t.after(duration/2, receive_bit);
 	}
 	else {
-		t.after(duration*1.05/2, receive_clock_synchro);
+		t.after(duration/2, receive_clock_synchro);
 	}
 }
 
@@ -111,19 +118,24 @@ void receive_bit() {
 		Serial.print("Received ");
 		Serial.println(bit_received);
 	#endif
-	assert(bit_received == bit_sent);
-	t.after(duration*1.05/2, receive_clock_synchro);
+	if (bit_received == bit_sent) {
+		nb_good += 1;
+	}
+	Serial.print("Good : ");
+	Serial.println((float)nb_good/(float)nb_total);
+	t.after(duration/2, receive_clock_synchro);
 }
 
 void setup() {
 	Serial.begin(9600);
+	pinMode(pin_calibration, OUTPUT); // always on for calibration
+	digitalWrite(pin_calibration, HIGH);
 	pinMode(pin_emitter, OUTPUT); // pseudo-laser
-	pinMode(pin_receiver, INPUT);  // pseudo-diode
 	pinMode(pin_control_led, OUTPUT); // control led
 	t.after(duration/2, setup_send_clock_synchro);
 	t.after(duration, setup_send_random_bit);
 	receive();
-	t.after(duration*1.05/2, receive_clock_synchro);
+	t.after(duration*3/4, receive_clock_synchro);
 }
 
 void loop() {
