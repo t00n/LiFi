@@ -1,5 +1,7 @@
 #include "Timer.h"
 
+// if DEBUG == 1 -> high level messages
+// if DEBUG == 2 -> high + low level messages
 #define DEBUG 1
 
 Timer t;
