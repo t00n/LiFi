@@ -1,0 +1,7 @@
+
+# Emetteur
+trouver quelle puissance de laser on a besoin pour 30m sans cramer les yeux des gens
+
+# Récepteur
+tuyau de plomberie noir contre le soleil
+phototransistor pour éviter les mauvais états de transition
