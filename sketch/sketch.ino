@@ -10,12 +10,14 @@
 /* Global */
 int nb_good = 0;
 int nb_total = 0;
-const uint32_t FREQUENCY = 250; // Hz
+const uint32_t FREQUENCY = 350; // Hz
+const uint32_t THRESHOLD = 65;
 
 /* Emitter */
 const int PIN_CALIBRATION = 6;
 const int PIN_EMITTER = 7;
-bool bit_sent;
+int bit_sent_i = 0;
+bool bit_sent[64];
 bool clock_sent = false;
 int state_sent = LOW;
 
@@ -24,6 +26,7 @@ const int PIN_RECEIVER = A0;
 const int PIN_CONTROL_LED = 13;
 bool clock_received = false;
 int state_received = LOW;
+int bit_received_i = 0;
 uint32_t last_t;
 
 void send_HIGH() {
@@ -52,15 +55,16 @@ void toggle_send_state() {
 }
 
 void send_random_bit() {
-	bit_sent = random(2);
+	bit_sent[bit_sent_i] = random(2);
 	#if DEBUG >= 1
 		Serial.print("Sending ");
-		Serial.println(bit_sent);
+		Serial.println(bit_sent[bit_sent_i]);
 	#endif
-	if (bit_sent) {
+	if (bit_sent[bit_sent_i]) {
 		toggle_send_state();
 	}
 	nb_total += 1;
+	bit_sent_i = (bit_sent_i + 1) % 64;
 }
 
 void send_clock_synchro() {
@@ -71,7 +75,7 @@ void send_clock_synchro() {
 }
 
 void receive() {
-	state_received = analogRead(PIN_RECEIVER) > 60;
+	state_received = analogRead(PIN_RECEIVER) > THRESHOLD;
 	digitalWrite(PIN_CONTROL_LED, state_received ? HIGH : LOW);
 	#if DEBUG >= 2
 		Serial.print("Received ");
@@ -91,14 +95,18 @@ void receive_bit() {
 		Serial.print("Received ");
 		Serial.println(bit_received);
 	#endif
-	if (bit_received == bit_sent) {
-		nb_good += 1;
+	if (bit_received == bit_sent[bit_received_i]) {
+		// nb_good += 1;
+		Serial.println(".");
 	}
-	Serial.println((float)nb_good/(float)nb_total);
+	else {
+		Serial.println("#");
+	}
+	bit_received_i = (bit_received_i + 1) % 64;
+	// Serial.print((float)nb_good/(float)nb_total);
 }
 
 uint32_t timer1_counter;
-uint32_t timer2_counter;
 
 void setup() {
 	Serial.begin(9600);
@@ -134,14 +142,15 @@ ISR(TIMER1_OVF_vect)        // interrupt service routine
 }
 
 void loop() {
+	uint32_t now = micros();
 	if (! clock_received) {
 		if (receive_transition()) {
 			clock_received = true;
-			last_t = micros();
+			last_t = now;
 		}
 	}
 	else {
-		if (micros() - last_t >= 1500000/(FREQUENCY)) {
+		if (now - last_t >= 1500000/FREQUENCY) {
 			receive_bit();
 			clock_received = false;
 		}
