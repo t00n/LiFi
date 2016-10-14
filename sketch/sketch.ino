@@ -7,9 +7,9 @@ const uint32_t FREQUENCY = 300; // Hz
 /* Emitter */
 const uint32_t PIN_CALIBRATION = 6;
 const uint32_t PIN_EMITTER = 7;
-const uint32_t BUFFER_SIZE = 256;
+const uint32_t BUFFER_SIZE = 512;
 uint32_t bit_sent_i = 0;
-bool bit_sent[BUFFER_SIZE];
+bool buffer[BUFFER_SIZE];
 bool clock_sent = false;
 uint32_t state_sent = LOW;
 
@@ -41,11 +41,11 @@ void toggle_send_state() {
 }
 
 void send_random_bit() {
-	bit_sent[bit_sent_i] = random(2);
-	if (bit_sent[bit_sent_i]) {
+	buffer[bit_sent_i % BUFFER_SIZE] = random(2);
+	if (buffer[bit_sent_i % BUFFER_SIZE]) {
 		toggle_send_state();
 	}
-	bit_sent_i = (bit_sent_i + 1) % BUFFER_SIZE;
+	++bit_sent_i;
 }
 
 void send_clock_synchro() {
@@ -66,7 +66,7 @@ void receive_bit() {
 	else {
 		Serial.println("#");
 	}
-	bit_received_i = (bit_received_i + 1) % BUFFER_SIZE;
+	++bit_received_i;
 }
 
 uint32_t timer1_counter;
@@ -118,4 +118,10 @@ void loop() {
 			clock_received = false;
 		}
 	}
+	if ((bit_sent_i - bit_received_i) >= BUFFER_SIZE) {
+		Serial.println("T'es dans la merde, mon gros");
+		Serial.println(bit_sent_i);
+		Serial.println(bit_received_i);
+	}
+
 }
