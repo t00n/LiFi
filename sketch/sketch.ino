@@ -58,6 +58,7 @@ void send_clock_synchro() {
 bool received_transition() {
 	uint32_t old_state = state_received;
 	state_received = digitalRead(PIN_RECEIVER);
+	digitalWrite(PIN_CONTROL_LED, state_received);
 	return old_state != state_received;
 }
 
