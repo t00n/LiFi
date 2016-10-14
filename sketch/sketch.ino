@@ -1,6 +1,9 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
+#define __ASSERT_USE_STDERR
+#include <assert.h>
+
 /* Global */
 const uint32_t FREQUENCY = 300; // Hz
 
@@ -60,12 +63,7 @@ bool received_transition() {
 
 void receive_bit() {
 	uint32_t bit_received = received_transition();
-	if (bit_received == bit_sent[bit_received_i]) {
-		Serial.println(".");
-	}
-	else {
-		Serial.println("#");
-	}
+	assert (bit_received == buffer[bit_received_i % BUFFER_SIZE]);
 	++bit_received_i;
 }
 
@@ -89,7 +87,6 @@ void setup() {
 	TIMSK1 |= (1 << TOIE1);   // enable timer overflow interrupt
 
 	interrupts();             // enable all interrupts
-
 }
 
 ISR(TIMER1_OVF_vect)        // interrupt service routine 
@@ -118,10 +115,16 @@ void loop() {
 			clock_received = false;
 		}
 	}
-	if ((bit_sent_i - bit_received_i) >= BUFFER_SIZE) {
-		Serial.println("T'es dans la merde, mon gros");
-		Serial.println(bit_sent_i);
-		Serial.println(bit_received_i);
-	}
+	assert(bit_sent_i - bit_received_i < BUFFER_SIZE);
+}
 
+void __assert(const char *__func, const char *__file, int __lineno, const char *__sexp) {
+    // transmit diagnostic informations through serial link.
+    Serial.println(__func);
+    Serial.println(__file);
+    Serial.println(__lineno, DEC);
+    Serial.println(__sexp);
+    Serial.flush();
+    // abort program execution.
+    abort();
 }
