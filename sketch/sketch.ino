@@ -75,6 +75,8 @@ void setup() {
 	pinMode(PIN_CALIBRATION, OUTPUT); // always on for calibration
 	digitalWrite(PIN_CALIBRATION, HIGH);
 	pinMode(PIN_EMITTER, OUTPUT); // laser
+
+	pinMode(PIN_RECEIVER, INPUT); // photodiode
 	pinMode(PIN_CONTROL_LED, OUTPUT); // control led
 
 	noInterrupts();
