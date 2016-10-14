@@ -1,48 +1,34 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-// if DEBUG == 0 -> no messages
-// if DEBUG == 1 -> high level messages
-// if DEBUG == 2 -> high + low level messages
-#define DEBUG 0
-
-
 /* Global */
-int nb_good = 0;
-int nb_total = 0;
-const uint32_t FREQUENCY = 350; // Hz
-const uint32_t THRESHOLD = 65;
+const uint32_t FREQUENCY = 300; // Hz
 
 /* Emitter */
-const int PIN_CALIBRATION = 6;
-const int PIN_EMITTER = 7;
-int bit_sent_i = 0;
-bool bit_sent[64];
+const uint32_t PIN_CALIBRATION = 6;
+const uint32_t PIN_EMITTER = 7;
+const uint32_t BUFFER_SIZE = 256;
+uint32_t bit_sent_i = 0;
+bool bit_sent[BUFFER_SIZE];
 bool clock_sent = false;
-int state_sent = LOW;
+uint32_t state_sent = LOW;
 
 /* Receiver */
-const int PIN_RECEIVER = A0;
-const int PIN_CONTROL_LED = 13;
+const uint32_t PIN_RECEIVER = 10;
+const uint32_t PIN_CONTROL_LED = 13;
+uint32_t bit_received_i = 0;
 bool clock_received = false;
-int state_received = LOW;
-int bit_received_i = 0;
+uint32_t state_received = LOW;
 uint32_t last_t;
 
 void send_HIGH() {
 	digitalWrite(PIN_EMITTER, HIGH);
 	state_sent = HIGH;
-	#if DEBUG >= 2
-		Serial.println("Sending HIGH");
-	#endif
 }
 
 void send_LOW() {
 	digitalWrite(PIN_EMITTER, LOW);
 	state_sent = LOW;
-	#if DEBUG >= 2
-		Serial.println("Sending LOW");
-	#endif
 }
 
 void toggle_send_state() {
@@ -56,54 +42,31 @@ void toggle_send_state() {
 
 void send_random_bit() {
 	bit_sent[bit_sent_i] = random(2);
-	#if DEBUG >= 1
-		Serial.print("Sending ");
-		Serial.println(bit_sent[bit_sent_i]);
-	#endif
 	if (bit_sent[bit_sent_i]) {
 		toggle_send_state();
 	}
-	nb_total += 1;
-	bit_sent_i = (bit_sent_i + 1) % 64;
+	bit_sent_i = (bit_sent_i + 1) % BUFFER_SIZE;
 }
 
 void send_clock_synchro() {
-	#if DEBUG >= 1
-		Serial.println("Sending synchronize");
-	#endif
 	toggle_send_state();
 }
 
-void receive() {
-	state_received = analogRead(PIN_RECEIVER) > THRESHOLD;
-	digitalWrite(PIN_CONTROL_LED, state_received ? HIGH : LOW);
-	#if DEBUG >= 2
-		Serial.print("Received ");
-		Serial.println(state_received);
-	#endif
-}
-
-bool receive_transition() {
-	int old_state = state_received;
-	receive();
+bool received_transition() {
+	uint32_t old_state = state_received;
+	state_received = digitalRead(PIN_RECEIVER);
 	return old_state != state_received;
 }
 
 void receive_bit() {
-	int bit_received = receive_transition();
-	#if DEBUG >= 1
-		Serial.print("Received ");
-		Serial.println(bit_received);
-	#endif
+	uint32_t bit_received = received_transition();
 	if (bit_received == bit_sent[bit_received_i]) {
-		// nb_good += 1;
 		Serial.println(".");
 	}
 	else {
 		Serial.println("#");
 	}
-	bit_received_i = (bit_received_i + 1) % 64;
-	// Serial.print((float)nb_good/(float)nb_total);
+	bit_received_i = (bit_received_i + 1) % BUFFER_SIZE;
 }
 
 uint32_t timer1_counter;
@@ -144,7 +107,7 @@ ISR(TIMER1_OVF_vect)        // interrupt service routine
 void loop() {
 	uint32_t now = micros();
 	if (! clock_received) {
-		if (receive_transition()) {
+		if (received_transition()) {
 			clock_received = true;
 			last_t = now;
 		}
