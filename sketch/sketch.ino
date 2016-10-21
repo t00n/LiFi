@@ -5,7 +5,7 @@
 #include <assert.h>
 
 /* Global */
-const uint32_t FREQUENCY = 300; // Hz
+const uint32_t FREQUENCY = 500; // Hz
 
 /* Emitter */
 const uint32_t PIN_CALIBRATION = 6;
@@ -23,6 +23,18 @@ uint32_t bit_received_i = 0;
 bool clock_received = false;
 uint32_t state_received = LOW;
 uint32_t last_t;
+
+// use assertion for debugging
+void __assert(const char *__func, const char *__file, int __lineno, const char *__sexp) {
+    // transmit diagnostic informations through serial link.
+    Serial.println(__func);
+    Serial.println(__file);
+    Serial.println(__lineno, DEC);
+    Serial.println(__sexp);
+    Serial.flush();
+    // abort program execution.
+    abort();
+}
 
 void send_HIGH() {
 	digitalWrite(PIN_EMITTER, HIGH);
@@ -70,28 +82,33 @@ void receive_bit() {
 
 uint32_t timer1_counter;
 
-void setup() {
-	Serial.begin(9600);
+void setup_emitter() {
 	pinMode(PIN_CALIBRATION, OUTPUT); // always on for calibration
 	digitalWrite(PIN_CALIBRATION, HIGH);
 	pinMode(PIN_EMITTER, OUTPUT); // laser
 
-	pinMode(PIN_RECEIVER, INPUT); // photodiode
-	pinMode(PIN_CONTROL_LED, OUTPUT); // control led
-
 	noInterrupts();
-
-	// TIMER1 : emitter
-	TCCR1A = 0;
+	TCCR1A = 0;				  // init options
 	TCCR1B = 0;
 	timer1_counter = 65536 - 62500/FREQUENCY;
 	TCNT1 = timer1_counter;   // preload timer
 	TCCR1B |= (1 << CS12);    // prescaler : 256
 	TIMSK1 |= (1 << TOIE1);   // enable timer overflow interrupt
-
 	interrupts();             // enable all interrupts
 }
 
+void setup_receiver() {
+	pinMode(PIN_RECEIVER, INPUT); // photodiode
+	pinMode(PIN_CONTROL_LED, OUTPUT); // control led
+}
+
+void setup() {
+	Serial.begin(9600);
+	setup_receiver();
+	setup_emitter();
+}
+
+// emitter timer
 ISR(TIMER1_OVF_vect)        // interrupt service routine 
 {
 	TCNT1 = timer1_counter;   // preload timer
@@ -105,6 +122,7 @@ ISR(TIMER1_OVF_vect)        // interrupt service routine
 }
 
 void loop() {
+	// receiver loop
 	uint32_t now = micros();
 	if (! clock_received) {
 		if (received_transition()) {
@@ -119,15 +137,4 @@ void loop() {
 		}
 	}
 	assert(bit_sent_i - bit_received_i < BUFFER_SIZE);
-}
-
-void __assert(const char *__func, const char *__file, int __lineno, const char *__sexp) {
-    // transmit diagnostic informations through serial link.
-    Serial.println(__func);
-    Serial.println(__file);
-    Serial.println(__lineno, DEC);
-    Serial.println(__sexp);
-    Serial.flush();
-    // abort program execution.
-    abort();
 }
