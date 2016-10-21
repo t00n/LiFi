@@ -5,24 +5,27 @@
 #include <assert.h>
 
 /* Global */
-const uint32_t FREQUENCY = 500; // Hz
+const uint32_t FREQUENCY = 1; // Hz
+const uint32_t BUFFER_SIZE = 10;
 
 /* Emitter */
 const uint32_t PIN_CALIBRATION = 6;
 const uint32_t PIN_EMITTER = 7;
-const uint32_t BUFFER_SIZE = 512;
-uint32_t bit_sent_i = 0;
-bool buffer[BUFFER_SIZE];
-bool clock_sent = false;
-uint32_t state_sent = LOW;
+uint32_t timer1_counter;
+bool clock_emitter;
+uint32_t state_emitter = LOW;
+char buffer_emitter[BUFFER_SIZE];
+uint32_t buffer_emitter_i = 0;
+uint8_t buffer_emitter_size = 0;
 
 /* Receiver */
 const uint32_t PIN_RECEIVER = 10;
 const uint32_t PIN_CONTROL_LED = 13;
-uint32_t bit_received_i = 0;
-bool clock_received = false;
-uint32_t state_received = LOW;
-uint32_t last_t;
+uint32_t last_t_receiver;
+bool clock_receiver = true;
+uint32_t state_receiver = LOW;
+char buffer_receiver[BUFFER_SIZE];
+uint32_t buffer_receiver_i = 0;
 
 // use assertion for debugging
 void __assert(const char *__func, const char *__file, int __lineno, const char *__sexp) {
@@ -38,16 +41,16 @@ void __assert(const char *__func, const char *__file, int __lineno, const char *
 
 void send_HIGH() {
 	digitalWrite(PIN_EMITTER, HIGH);
-	state_sent = HIGH;
+	state_emitter = HIGH;
 }
 
 void send_LOW() {
 	digitalWrite(PIN_EMITTER, LOW);
-	state_sent = LOW;
+	state_emitter = LOW;
 }
 
 void toggle_send_state() {
-	if (state_sent == HIGH) {
+	if (state_emitter == HIGH) {
 		send_LOW();
 	}
 	else {
@@ -55,32 +58,57 @@ void toggle_send_state() {
 	}	
 }
 
-void send_random_bit() {
-	buffer[bit_sent_i % BUFFER_SIZE] = random(2);
-	if (buffer[bit_sent_i % BUFFER_SIZE]) {
+// void send_random_bit() {
+// 	bool bit = random(2);
+// 	if (bit) {
+// 		toggle_send_state();
+// 	}
+// }
+
+void send_next_bit() {
+	char bit = buffer_emitter[buffer_emitter_i];
+	if (bit == '1') {
 		toggle_send_state();
 	}
-	++bit_sent_i;
+	++buffer_emitter_i;
 }
 
 void send_clock_synchro() {
 	toggle_send_state();
 }
 
+void fill_emitter_buffer() {
+	if (Serial.available()) {
+		buffer_emitter_size = 0;
+		while (buffer_emitter_size < BUFFER_SIZE) {
+			buffer_emitter[buffer_emitter_size] = Serial.read();
+			++buffer_emitter_size;
+		}
+		buffer_emitter_i = 0;
+		Serial.println(buffer_emitter);
+	}
+}
+
 bool received_transition() {
-	uint32_t old_state = state_received;
-	state_received = digitalRead(PIN_RECEIVER);
-	digitalWrite(PIN_CONTROL_LED, state_received);
-	return old_state != state_received;
+	bool old_state = state_receiver;
+	state_receiver = digitalRead(PIN_RECEIVER);
+	digitalWrite(PIN_CONTROL_LED, state_receiver);
+	return old_state != state_receiver;
 }
 
 void receive_bit() {
-	uint32_t bit_received = received_transition();
-	assert (bit_received == buffer[bit_received_i % BUFFER_SIZE]);
-	++bit_received_i;
+	bool bit_received = received_transition();
+	buffer_receiver[buffer_receiver_i] = bit_received ? '1' : '0';
+	++buffer_receiver_i;
+	if (buffer_receiver_i == BUFFER_SIZE) {
+		empty_receiver_buffer();
+		buffer_receiver_i = 0;
+	}
 }
 
-uint32_t timer1_counter;
+void empty_receiver_buffer() {
+	Serial.println(buffer_receiver);
+}
 
 void setup_emitter() {
 	pinMode(PIN_CALIBRATION, OUTPUT); // always on for calibration
@@ -104,6 +132,7 @@ void setup_receiver() {
 
 void setup() {
 	Serial.begin(9600);
+	Serial.setTimeout(1);
 	setup_receiver();
 	setup_emitter();
 }
@@ -112,29 +141,35 @@ void setup() {
 ISR(TIMER1_OVF_vect)        // interrupt service routine 
 {
 	TCNT1 = timer1_counter;   // preload timer
-	if (! clock_sent) {
-		send_clock_synchro();
+	if (buffer_emitter_size > 0) { // if something to send
+		if (clock_emitter) {
+			send_clock_synchro();
+		}
+		else {
+			send_next_bit();
+			--buffer_emitter_size;
+		}
+		clock_emitter ^= 1;
 	}
 	else {
-		send_random_bit();
+		fill_emitter_buffer();
+		clock_emitter = true; // force clock synchro
 	}
-	clock_sent ^= 1;
 }
 
 void loop() {
 	// receiver loop
 	uint32_t now = micros();
-	if (! clock_received) {
+	if (clock_receiver) {
 		if (received_transition()) {
-			clock_received = true;
-			last_t = now;
+			clock_receiver = false;
+			last_t_receiver = now;
 		}
 	}
 	else {
-		if (now - last_t >= 1500000/FREQUENCY) {
+		if (now - last_t_receiver >= 1500000/FREQUENCY) {
 			receive_bit();
-			clock_received = false;
+			clock_receiver = true;
 		}
 	}
-	assert(bit_sent_i - bit_received_i < BUFFER_SIZE);
 }
