@@ -15,8 +15,8 @@ uint32_t timer1_counter;
 bool clock_emitter;
 uint32_t state_emitter = LOW;
 char buffer_emitter[BUFFER_SIZE];
-uint32_t buffer_emitter_i = 0;
-uint8_t buffer_emitter_size = 0;
+uint32_t buffer_emitter_in = 0;
+uint32_t buffer_emitter_out = 0;
 
 /* Receiver */
 const uint32_t PIN_RECEIVER = 10;
@@ -66,11 +66,11 @@ void toggle_send_state() {
 // }
 
 void send_next_bit() {
-	char bit = buffer_emitter[buffer_emitter_i];
+	char bit = buffer_emitter[buffer_emitter_out % BUFFER_SIZE];
 	if (bit == '1') {
 		toggle_send_state();
 	}
-	++buffer_emitter_i;
+	++buffer_emitter_out;
 }
 
 void send_clock_synchro() {
@@ -78,14 +78,12 @@ void send_clock_synchro() {
 }
 
 void fill_emitter_buffer() {
-	if (Serial.available()) {
-		buffer_emitter_size = 0;
-		while (buffer_emitter_size < BUFFER_SIZE) {
-			buffer_emitter[buffer_emitter_size] = Serial.read();
-			++buffer_emitter_size;
+	if (Serial.available() && (buffer_emitter_in - buffer_emitter_out < BUFFER_SIZE)) {
+		char bit = Serial.read();
+		if (bit == '0' || bit == '1') { 
+			buffer_emitter[buffer_emitter_in % BUFFER_SIZE] = bit;
+			++buffer_emitter_in;
 		}
-		buffer_emitter_i = 0;
-		Serial.println(buffer_emitter);
 	}
 }
 
@@ -102,12 +100,12 @@ void receive_bit() {
 	++buffer_receiver_i;
 	if (buffer_receiver_i == BUFFER_SIZE) {
 		empty_receiver_buffer();
-		buffer_receiver_i = 0;
 	}
 }
 
 void empty_receiver_buffer() {
 	Serial.println(buffer_receiver);
+	buffer_receiver_i = 0;
 }
 
 void setup_emitter() {
@@ -141,19 +139,18 @@ void setup() {
 ISR(TIMER1_OVF_vect)        // interrupt service routine 
 {
 	TCNT1 = timer1_counter;   // preload timer
-	if (buffer_emitter_size > 0) { // if something to send
+	fill_emitter_buffer();
+	if (buffer_emitter_in - buffer_emitter_out > 0) { // if something to send
 		if (clock_emitter) {
 			send_clock_synchro();
 		}
 		else {
 			send_next_bit();
-			--buffer_emitter_size;
 		}
 		clock_emitter ^= 1;
 	}
 	else {
-		fill_emitter_buffer();
-		clock_emitter = true; // force clock synchro
+		clock_emitter = true;
 	}
 }
 
